@@ -1,0 +1,206 @@
+unit Unit1;
+
+interface
+
+uses
+  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants,
+  System.Classes, Vcl.Graphics,
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, ShellApi, TlHelp32,
+  Vcl.ExtCtrls;
+
+type
+  TForm1 = class(TForm)
+    Button1: TButton;
+    Memo1: TMemo;
+    Button2: TButton;
+    Label1: TLabel;
+    Label2: TLabel;
+    Timer1: TTimer;
+    Timer2: TTimer;
+    ComboBox1: TComboBox;
+    ComboBox2: TComboBox;
+    ComboBox3: TComboBox;
+    Button3: TButton;
+    Timer3: TTimer;
+    Label3: TLabel;
+    function KillTask(ExeFileName: string): Integer;
+    procedure Button1Click(Sender: TObject);
+    procedure Button2Click(Sender: TObject);
+    procedure Timer1Timer(Sender: TObject);
+    procedure Timer2Timer(Sender: TObject);
+    Function getInterval: boolean;
+    procedure Button3Click(Sender: TObject);
+    procedure FormCreate(Sender: TObject);
+    procedure FormClose(Sender: TObject; var Action: TCloseAction);
+    procedure ComboBox3Change(Sender: TObject);
+  private
+    { Private declarations }
+    procToKill: array [0 .. 1] of string;
+    fileToStart: array [0 .. 1] of string;
+    folderToStart: string;
+    appFolder: string;
+    logFile: string;
+  public
+    { Public declarations }
+  end;
+
+var
+  Form1: TForm1;
+
+implementation
+
+{$R *.dfm}
+
+function TForm1.KillTask(ExeFileName: string): Integer;
+const
+  PROCESS_TERMINATE = $0001;
+var
+  ContinueLoop: BOOL;
+  FSnapshotHandle: THandle;
+  FProcessEntry32: TProcessEntry32;
+begin
+  Result := 0;
+  FSnapshotHandle := CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+  FProcessEntry32.dwSize := SizeOf(FProcessEntry32);
+  ContinueLoop := Process32First(FSnapshotHandle, FProcessEntry32);
+
+  while Integer(ContinueLoop) <> 0 do
+  begin
+    if ((UpperCase(ExtractFileName(FProcessEntry32.szExeFile))
+      = UpperCase(ExeFileName)) or (UpperCase(FProcessEntry32.szExeFile)
+      = UpperCase(ExeFileName))) then
+      Result := Integer(TerminateProcess(OpenProcess(PROCESS_TERMINATE, BOOL(0),
+        FProcessEntry32.th32ProcessID), 0));
+    ContinueLoop := Process32Next(FSnapshotHandle, FProcessEntry32);
+  end;
+  CloseHandle(FSnapshotHandle);
+end;
+
+Function TForm1.getInterval: boolean;
+begin
+  if (Time() > StrToTime(ComboBox1.Text)) and
+    (Time() < StrToTime(ComboBox2.Text)) then
+  begin
+    getInterval := true; // през деня
+  end
+  else
+  begin
+    getInterval := false; // през нощта
+  end;
+end;
+
+procedure TForm1.Timer1Timer(Sender: TObject);
+begin
+  if getInterval then
+  begin
+    Timer1.Enabled := false;
+    Timer2.Enabled := true;
+    Form1.Button2Click(Sender);
+  end;
+end;
+
+procedure TForm1.Timer2Timer(Sender: TObject);
+begin
+  if getInterval = false then
+  begin
+    Timer1.Enabled := true;
+    Timer2.Enabled := false;
+    Form1.Button1Click(Sender);
+  end;
+end;
+
+procedure TForm1.Button1Click(Sender: TObject);
+begin
+  procToKill[0] := 'java.exe';
+  procToKill[1] := 'cmd.exe';
+  Memo1.Lines.Add(DateToStr(now) + ' ' + TimeToStr(now) + ': ' +
+    inttostr(KillTask(procToKill[1])) + ' процеса ' + procToKill[1] +
+    ' са спрени.');
+  Memo1.Lines.Add(DateToStr(now) + ' ' + TimeToStr(now) + ': ' +
+    inttostr(KillTask(procToKill[0])) + ' процеса ' + procToKill[0] +
+    ' са спрени.');
+  Memo1.Lines.SaveToFile(appFolder + logFile);
+end;
+
+procedure TForm1.Button2Click(Sender: TObject);
+begin
+  folderToStart := 'D:\sirma\deliverable\MessagesBridge.distrib.201612120059\';
+  fileToStart[0] :=
+    'D:\sirma\deliverable\projects\pob_ant_stephan\POBEISPPRunScripts\EISPP_ToFrom_MQ_Loop.cmd';
+  fileToStart[1] :=
+    'D:\sirma\deliverable\MessagesBridge.distrib.201612120059\run.bat';
+  ShellExecute(0, 'open', PChar(fileToStart[0]), nil, nil, SW_SHOW);
+  ShellExecute(Application.Handle, nil, PChar(fileToStart[1]), nil,
+    PChar(folderToStart), SW_SHOW);
+  Memo1.Lines.Add(DateToStr(now) + ' ' + TimeToStr(now) + ': ' + fileToStart[0]
+    + ' е стартиран.');
+  Memo1.Lines.Add(DateToStr(now) + ' ' + TimeToStr(now) + ': ' + fileToStart[1]
+    + ' е стартиран.');
+  Memo1.Lines.SaveToFile(appFolder + logFile);
+end;
+
+procedure TForm1.Button3Click(Sender: TObject);
+begin
+  if Button3.Caption = 'Stop' then
+  begin
+    Form1.Button1Click(Sender);
+    Timer1.Enabled := false;
+    Timer2.Enabled := false;
+    Timer3.Enabled := false;
+    Button3.Caption := 'Start';
+    ComboBox1.Enabled := true;
+    ComboBox2.Enabled := true;
+    ComboBox3.Enabled := true;
+  end
+  else
+  begin
+    if getInterval then
+    begin
+      Timer1.Enabled := true;
+      Timer2.Enabled := false;
+      Timer3.Enabled := true;
+    end
+    else
+    begin
+      Timer1.Enabled := false;
+      Timer2.Enabled := true;
+      Timer3.Enabled := false;
+    end;
+    ComboBox1.Enabled := false;
+    ComboBox2.Enabled := false;
+    ComboBox3.Enabled := false;
+    Button3.Caption := 'Stop';
+  end;
+end;
+
+procedure TForm1.ComboBox3Change(Sender: TObject);
+begin
+  Timer3.Interval := inttostr(ComboBox3.Text) * 1000;
+end;
+
+procedure TForm1.FormClose(Sender: TObject; var Action: TCloseAction);
+begin
+  Memo1.Lines.SaveToFile(appFolder + logFile);
+end;
+
+procedure TForm1.FormCreate(Sender: TObject);
+begin
+  appFolder := ExtractFileDir(Application.ExeName) + '\';
+  logFile := 'Communication control.log';
+  ComboBox1.ItemIndex := 30;
+  ComboBox2.ItemIndex := 92;
+  ComboBox3.ItemIndex := 5;
+  if FileExists(appFolder + logFile) then
+  begin
+    Memo1.Lines.LoadFromFile(appFolder + logFile);
+  end
+  else
+  begin
+    Memo1.Clear;
+    Memo1.Lines.SaveToFile(appFolder + logFile);
+  end;
+  Timer3.Interval := inttostr(ComboBox3.Text) * 1000;
+  Form1.Button3Click(Sender);
+end;
+
+end.
